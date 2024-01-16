@@ -1,0 +1,165 @@
+#!/bin/bash
+
+currentpath="$PWD"
+subs=""
+help_message="Usage: $0 -d <subdomains_file> [-o <output_directory>] [-h]
+
+Options:
+  -d  Specify the file containing subdomains.
+  -o  Specify the output directory (optional, default: $currentpath/url/).
+  -h  Display this help message."
+
+while getopts "d:o:h" flag; do
+    case "${flag}" in
+        d) subs=${OPTARG};;
+        o) currentpath=${OPTARG};;
+        h) echo "$help_message"; exit 0;;
+        *) echo "$help_message"; exit 1;;
+    esac
+done
+
+if [ -z "$subs" ]; then
+    echo "Error: Please provide the file containing subdomains."
+    echo "$help_message"
+    exit 1
+fi
+
+if [ -d "$currentpath/url" ]; then
+    echo "url Directory exists"
+else
+    echo "url does not exist" && mkdir "$currentpath/url/"
+fi
+
+# Function to create output directory if it doesn't exist
+dirf() {
+    if [ -d "$currentpath/url/$x" ]; then
+        echo "url Directory exists"
+    else
+        echo "url does not exist" && mkdir "$currentpath/url/$i/"
+    fi
+}
+
+# Function to run gau
+gauf() {
+    if [ -f "$currentpath/url/$i/gau" ]; then
+        echo "gau is already done for $x"
+    else
+        echo "gau out for $x" && echo "$x" | gau | tee "$currentpath/url/$i/gau"
+    fi
+}
+
+# Function to run katana
+katanaf() {
+    if [ -f "$currentpath/url/$i/ga" ]; then
+        echo "katana is already done for $x"
+    else
+        echo "katana out for $x" && katana -u "$x" | tee "$currentpath/url/$i/ga"
+    fi
+}
+
+# Function to sort URLs
+sortf() {
+    if [ -f "$currentpath/url/$i/allurl1" ]; then
+        echo "allurl sort is already done for $x"
+    else
+        echo "sort the out for $x" && cat "$currentpath/url/$i/"* | sort -u | grep -ivE '/.css|/.png|/.jpeg|/.jpg|/.svg|/.gif|/.wolf|./ico' | tee "$currentpath/url/$i/allurl1"
+    fi
+}
+
+# Function to run httpx
+httpxs() {
+    httpx -l "$currentpath/url/$i/allurl1" -proxy http://127.0.0.1:8080 -o "$currentpath/url/$i/allurl"
+}
+
+# Function to run dirsearchcve
+dirsearchcve() {
+    if [ -f "$currentpath/url/$i/cve_path" ]; then
+        echo "cve_path is already done for $x"
+    else
+        echo "cve_path out for $x" && dirsearch -u "$x" -w /root/cve_path -o "$currentpath/url/$i/cve_path"
+    fi
+}
+
+# Function to create output directory for gf patterns
+gfg() {
+    if [ -d "$currentpath/url/$i/gfPatternsScan" ]; then
+        echo "gf Directory exists"
+    else
+        echo "gf does not exist" && mkdir "$currentpath/url/$i/gfPatternsScan"
+    fi
+}
+
+# Function to run gf on different patterns
+run_gf_patterns() {
+    local output_directory="$currentpath/url/$i/gfPatternsScan"
+
+    echo "Running GF Patterns for $x"
+    gff "$output_directory"
+
+    # Run each gf pattern and append results to reflected.txt
+    gf redirect "$output_directory/redirect.txt" | tee -a "$output_directory/reflected.txt"
+    gf xss "$output_directory/xss.txt" | tee -a "$output_directory/reflected.txt"
+    gf ssti "$output_directory/ssti.txt" | tee -a "$output_directory/reflected.txt"
+    gf sqli "$output_directory/sqli.txt" | tee -a "$output_directory/reflected.txt"
+    gf rce "$output_directory/rce.txt" | tee -a "$output_directory/reflected.txt"
+    gf lfi "$output_directory/lfi.txt" | tee -a "$output_directory/reflected.txt"
+    gf ssrf "$output_directory/ssfrparams.txt" | tee -a "$output_directory/reflected.txt"
+    gf uro "$output_directory/reflected.txt" | Gxss | tee -a "$output_directory/reflected.txt"
+}
+
+# Function to remove temporary files
+rmf() {
+    rm "$currentpath/url/$i/gau" "$currentpath/url/$i/ga"
+}
+
+# Function to extract JS files
+jsfile() {
+    cat "$currentpath/url/$i/allurl" | grep '.js' | grep -v '.json' | uro | tee "$currentpath/url/$i/jsurl"
+}
+
+# Function to run SecretFinder on JS files
+secrirjs() {
+    for i in $(cat "$currentpath/url/$i/jsurl"); do
+        echo "[ + ] URL: $i"
+        python3 /root/SecretFinder/SecretFinder.py -i "$i" -o cli >>"$currentpath/url/$i/jssecrit"
+    done
+}
+
+# Function to create a placeholder file
+f0f() {
+    if [ -f "$currentpath/url/$i/0" ]; then
+        echo "0 is already done for $x"
+    else
+        echo "0 out for $x" && touch "$currentpath/url/$i/0"
+    fi
+}
+
+# Function to run all steps
+alluuu() {
+    if [ -f "$currentpath/url/$i/0" ]; then
+        echo "allurl is already done for $x"
+    else
+        echo "running allurl for $x"
+        dirf
+        gauf
+        katanaf
+        sortf
+        dirsearchcve
+        httpxs
+        gfg
+        run_gf_patterns "$currentpath/url/$i/allurl1" "$currentpath/url/$i"
+        jsfile
+        secrirjs
+        rmf
+        f0f
+    fi
+}
+
+# Main execution
+if [ -f "$subs" ]; then
+    for i in $(cat "$subs"); do x=$i; alluuu; done
+else
+    x=$subs
+    i=''
+    alluuu
+fi
